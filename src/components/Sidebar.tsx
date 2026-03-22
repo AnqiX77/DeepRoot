@@ -30,10 +30,10 @@ export function Sidebar() {
   }, []);
 
   const navItems = [
+    { href: "/guide", label: "使用说明", icon: "📖" },
     { href: "/", label: "知识树", icon: "🌳" },
     { href: "/notes", label: "笔记列表", icon: "📝" },
     { href: "/chat", label: "AI 对话", icon: "💬" },
-    { href: "/guide", label: "使用说明", icon: "📖" },
   ];
 
   return (
