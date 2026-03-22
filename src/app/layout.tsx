@@ -5,7 +5,7 @@ import { AISidebarProvider } from "@/components/AISidebarContext";
 import { ImageLightbox } from "@/components/ImageLightbox";
 
 export const metadata: Metadata = {
-  title: "DeepRoot-个人树状知识库",
+  title: "DeepRoot-你的树状知识库",
   description: "从问题出发，递归到知识的根部。支持划选提问、知识树可视化、AI 对话。",
 };
 
