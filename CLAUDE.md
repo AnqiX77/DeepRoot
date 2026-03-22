@@ -2,67 +2,67 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## 项目概述
 
-DeepRoot is a personal knowledge base tool built around "recursive deep learning" — users highlight text in notes to ask AI questions, save AI answers as child notes, and continue questioning recursively, forming a growing knowledge tree. All user data is stored locally in the browser via IndexedDB.
+DeepRoot 是一个以「递归式深度学习」为核心的个人知识库工具。用户在笔记中划选文字向 AI 追问，AI 的答案可一键存为子笔记，子笔记中又可以继续追问——形成一棵不断生长的「学习树」。所有用户数据存储在浏览器本地 IndexedDB 中，无需后端数据库。
 
-## Commands
+## 常用命令
 
-- `npm run dev` — Start dev server with Turbopack on port 3000
-- `npm run build` — Production build (may need `NODE_OPTIONS=--max-old-space-size=4096` on low-memory machines)
-- `npm run lint` — ESLint via Next.js
-- `npx tsc --noEmit` — Type check without emitting
+- `npm run dev` — 使用 Turbopack 启动开发服务器（端口 3000）
+- `npm run build` — 生产构建（低内存机器可能需要 `NODE_OPTIONS=--max-old-space-size=4096`）
+- `npm run lint` — ESLint 检查
+- `npx tsc --noEmit` — 仅做类型检查，不输出文件
 
-## Architecture
+## 技术架构
 
-**Stack**: Next.js 15 (App Router), React 19, Tailwind CSS v4, Tiptap v3, IndexedDB (`idb`), ReactFlow, MiniSearch.
+**技术栈**：Next.js 15（App Router）、React 19、Tailwind CSS v4、Tiptap v3、IndexedDB（`idb`）、ReactFlow、MiniSearch。
 
-**Key design decisions**:
-- **Client-first**: All data (notes, tags, chat sessions, embeddings) stored in browser IndexedDB. No backend database.
-- **API proxy only**: The sole server-side code is `src/app/api/chat/route.ts`, which proxies requests to 智谱 AI GLM API and streams SSE responses. This hides `ZHIPU_API_KEY` from the client.
-- **HTML storage**: Note content is stored as HTML (Tiptap output), not Markdown. Conversion to Markdown happens only on export.
-- **Local RAG**: `@xenova/transformers` runs in the browser for embedding. Vectors stored in IndexedDB.
+**核心设计决策**：
+- **客户端优先**：所有数据（笔记、标签、对话、向量）均存储在浏览器 IndexedDB 中，无后端数据库。
+- **仅代理 API**：唯一的服务端代码是 `src/app/api/chat/route.ts`，负责代理智谱 AI GLM API 请求并以 SSE 流式返回，避免 API Key 暴露到客户端。
+- **HTML 存储**：笔记内容以 HTML 格式存储（Tiptap 输出），非 Markdown。仅在导出时才转换为 Markdown。
+- **本地 RAG**：`@xenova/transformers` 在浏览器端运行 embedding，向量存储在 IndexedDB 中。
 
-**Data flow for core interaction (highlight → ask AI → save as note)**:
-1. User selects text in `NoteEditor` → `SelectionMenu` appears
-2. Click "向 AI 提问" → `AISidebarContext.openSidebar()` with selected text + note context
-3. `AISidebar` sends POST to `/api/chat` → Route Handler calls GLM API with SSE streaming
-4. User clicks "存为笔记" → `createNote()` with `parentId` set to current note
-5. `window.dispatchEvent("tags-updated")` triggers sidebar tag refresh
+**核心交互数据流（划选 → 提问 → 存为笔记）**：
+1. 用户在 `NoteEditor` 中选中文字 → `SelectionMenu` 浮出
+2. 点击「向 AI 提问」→ `AISidebarContext.openSidebar()` 携带选中文字和笔记上下文
+3. `AISidebar` 发送 POST 到 `/api/chat` → Route Handler 调用 GLM API 并流式返回
+4. 用户点击「存为笔记」→ `createNote()` 自动设置 `parentId` 为当前笔记
+5. 触发 `window.dispatchEvent("tags-updated")`，侧边栏刷新标签
 
-**State management**: `AISidebarContext` (React Context) is the only global state. Everything else is local component state + IndexedDB reads.
+**状态管理**：`AISidebarContext`（React Context）是唯一的全局状态，其余均为组件本地状态 + IndexedDB 读取。
 
-## Key Modules
+## 关键模块
 
-| Path | Purpose |
-|------|---------|
-| `src/lib/db.ts` | IndexedDB schema (v2), all CRUD operations. Manages note parent-child relationships and tag reference counting. |
-| `src/lib/search.ts` | MiniSearch wrapper with Chinese tokenization. Lazily built, invalidated on note save via `invalidateSearchIndex()`. |
-| `src/lib/rag.ts` | Browser-side embedding with `@xenova/transformers`. Chunks text ~300 chars, cosine similarity search. |
-| `src/lib/export.ts` | HTML→Markdown conversion, single note export (.md), full library export (.zip with images). |
-| `src/app/api/chat/route.ts` | SSE proxy to GLM API. Returns mock response when `ZHIPU_API_KEY` is missing. |
+| 路径 | 用途 |
+|------|------|
+| `src/lib/db.ts` | IndexedDB 数据层（v2 schema），包含所有 CRUD 操作，管理笔记父子关系和标签引用计数 |
+| `src/lib/search.ts` | MiniSearch 全文搜索，支持中文分词，惰性构建索引，笔记保存时通过 `invalidateSearchIndex()` 失效 |
+| `src/lib/rag.ts` | 浏览器端 embedding（`@xenova/transformers`），按 ~300 字分段，余弦相似度检索 |
+| `src/lib/export.ts` | HTML→Markdown 转换，单篇导出 .md，全库导出 .zip（含图片） |
+| `src/app/api/chat/route.ts` | SSE 代理智谱 GLM API，无 API Key 时返回 mock 响应 |
 
-## Non-Obvious Patterns
+## 需要注意的非显而易见的模式
 
-- **Note links** use `[[` trigger in the editor, stored as `<span data-note-link="noteId">` in HTML. These also create edges in the knowledge tree visualization.
-- **Tag counts** use reference counting in the tags store, recalculated via `recalculateTagCounts()` when needed.
-- **Search index** is rebuilt lazily on first search after invalidation — not on every save.
-- **`tags-updated` event**: A custom DOM event used to coordinate tag refresh across components (Sidebar listens, note pages dispatch).
-- **Tiptap v3**: No `BubbleMenu` export — custom `SelectionMenu` component replaces it using `window.getSelection()`.
-- **PDF worker**: `public/pdf.worker.min.mjs` is a local copy from pdfjs-dist to avoid COEP issues.
-- **`immediatelyRender: false`** on `useEditor` is required to prevent SSR hydration errors with Tiptap.
-- **`creatingRef`** guard in `notes/[id]/page.tsx` prevents double note creation in React strict mode.
+- **笔记链接**：编辑器中输入 `[[` 触发，存储为 `<span data-note-link="noteId">`。这些链接也会在知识树中生成棕色虚线连边。
+- **标签计数**：tags store 中维护引用计数，需要时通过 `recalculateTagCounts()` 重新计算。
+- **搜索索引**：在失效后的首次搜索时惰性重建，而非每次保存时重建。
+- **`tags-updated` 事件**：自定义 DOM 事件，用于跨组件协调标签刷新（Sidebar 监听，笔记页面派发）。
+- **Tiptap v3**：v3 不导出 `BubbleMenu`，用自定义 `SelectionMenu` 组件替代，基于 `window.getSelection()` 定位。
+- **PDF worker**：`public/pdf.worker.min.mjs` 从 pdfjs-dist 复制到本地，避免 COEP 跨域问题。
+- **`immediatelyRender: false`**：`useEditor` 必须设置此项，防止 Tiptap 的 SSR 水合错误。
+- **`creatingRef` 守卫**：`notes/[id]/page.tsx` 中用 `useRef` 防止 React 严格模式下重复创建笔记。
 
-## Styling
+## 样式规范
 
-Theme colors are defined in `src/app/globals.css` under `@theme`. Primary color is deep green (`#166534`). Use Tailwind's `text-primary`, `bg-primary`, etc. — do not hardcode color values in components.
+主题颜色定义在 `src/app/globals.css` 的 `@theme` 块中。主色为深绿色（`#166534`）。组件中使用 Tailwind 的 `text-primary`、`bg-primary` 等类名，不要硬编码颜色值。
 
-## Environment
+## 环境配置
 
-- `ZHIPU_API_KEY` in `.env.local` (or Vercel env vars for production)
-- COEP/COOP headers in `next.config.ts` for WASM support
-- `vercel.json` sets 60s function timeout for streaming AI responses
+- `.env.local` 中设置 `ZHIPU_API_KEY`（生产环境在 Vercel 环境变量中配置）
+- `next.config.ts` 配置了 COEP/COOP 头以支持 WASM
+- `vercel.json` 设置函数超时为 60 秒，适配 AI 流式响应
 
-## Language
+## 语言要求
 
-All UI text and user-facing content must be in Chinese (中文).
+所有界面文本和面向用户的内容必须使用中文。
